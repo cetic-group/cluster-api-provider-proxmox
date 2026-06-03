@@ -365,6 +365,11 @@ type RouteSpec struct {
 	// table is the routing table used for this route.
 	// +optional
 	Table *int32 `json:"table,omitempty"`
+
+	// is6 defines if a RouteSpec is IPv6.
+	// This is useful if the matches are placeholders.
+	// +optional
+	Is6 *bool `json:"is6,omitempty"`
 }
 
 // RoutingPolicySpec is a Linux FIB rule.
@@ -386,6 +391,11 @@ type RoutingPolicySpec struct {
 	// +kubebuilder:validation:XValidation:message="Cowardly refusing to insert FIB rule matching kernel rules",rule="(self > 0 && self < 32765) || (self > 32766)"
 	// +optional
 	Priority *int64 `json:"priority,omitempty"`
+
+	// is6 defines if a RoutingPolicySpec is IPv6.
+	// This is useful if the matches are placeholders.
+	// +optional
+	Is6 *bool `json:"is6,omitempty"`
 }
 
 // VRFDevice defines Virtual Routing Flow devices.

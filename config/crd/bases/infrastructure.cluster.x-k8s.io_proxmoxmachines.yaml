@@ -1128,6 +1128,11 @@ spec:
                           items:
                             description: RouteSpec describes an IPv4/IPv6 Route.
                             properties:
+                              is6:
+                                description: |-
+                                  is6 defines if a RouteSpec is IPv6.
+                                  This is useful if the matches are placeholders.
+                                type: boolean
                               metric:
                                 description: metric is the priority of the route in
                                   the routing table.
@@ -1158,6 +1163,11 @@ spec:
                               from:
                                 description: from is the subnet of the source.
                                 type: string
+                              is6:
+                                description: |-
+                                  is6 defines if a RoutingPolicySpec is IPv6.
+                                  This is useful if the matches are placeholders.
+                                type: boolean
                               priority:
                                 description: priority is the position in the ip rule
                                   FIB table.
@@ -1218,6 +1228,11 @@ spec:
                           items:
                             description: RouteSpec describes an IPv4/IPv6 Route.
                             properties:
+                              is6:
+                                description: |-
+                                  is6 defines if a RouteSpec is IPv6.
+                                  This is useful if the matches are placeholders.
+                                type: boolean
                               metric:
                                 description: metric is the priority of the route in
                                   the routing table.
@@ -1248,6 +1263,11 @@ spec:
                               from:
                                 description: from is the subnet of the source.
                                 type: string
+                              is6:
+                                description: |-
+                                  is6 defines if a RoutingPolicySpec is IPv6.
+                                  This is useful if the matches are placeholders.
+                                type: boolean
                               priority:
                                 description: priority is the position in the ip rule
                                   FIB table.
