@@ -30,8 +30,8 @@ import (
 	"k8s.io/utils/ptr"
 
 	infrav1 "github.com/ionos-cloud/cluster-api-provider-proxmox/api/v1alpha2"
+	"github.com/ionos-cloud/cluster-api-provider-proxmox/pkg/network"
 	"github.com/ionos-cloud/cluster-api-provider-proxmox/pkg/scope"
-	"github.com/ionos-cloud/cluster-api-provider-proxmox/pkg/types"
 )
 
 const (
@@ -297,8 +297,8 @@ func parseVia(s *string) (netip.Addr, error) {
 
 // ToRoutingData converts a slice of infrav1.RouteSpec into renderer-side
 // RoutingData, validating that the address fields parse.
-func ToRoutingData(specs []infrav1.RouteSpec) ([]types.RoutingData, error) {
-	out := make([]types.RoutingData, 0, len(specs))
+func ToRoutingData(specs []infrav1.RouteSpec) ([]network.RoutingData, error) {
+	out := make([]network.RoutingData, 0, len(specs))
 	for _, spec := range specs {
 		to, err := parseRouteTarget(spec.To, spec.Is6)
 		if err != nil {
@@ -308,7 +308,7 @@ func ToRoutingData(specs []infrav1.RouteSpec) ([]types.RoutingData, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, types.RoutingData{
+		out = append(out, network.RoutingData{
 			To:     to,
 			Table:  spec.Table,
 			Via:    via,
@@ -320,8 +320,8 @@ func ToRoutingData(specs []infrav1.RouteSpec) ([]types.RoutingData, error) {
 
 // ToFIBRuleData converts a slice of infrav1.RoutingPolicySpec into
 // renderer-side FIBRuleData, validating that the address fields parse.
-func ToFIBRuleData(specs []infrav1.RoutingPolicySpec) ([]types.FIBRuleData, error) {
-	out := make([]types.FIBRuleData, 0, len(specs))
+func ToFIBRuleData(specs []infrav1.RoutingPolicySpec) ([]network.FIBRuleData, error) {
+	out := make([]network.FIBRuleData, 0, len(specs))
 	for _, spec := range specs {
 		to, err := parseRouteTarget(spec.To, spec.Is6)
 		if err != nil {
@@ -332,7 +332,7 @@ func ToFIBRuleData(specs []infrav1.RoutingPolicySpec) ([]types.FIBRuleData, erro
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid FIB rule from")
 		}
-		out = append(out, types.FIBRuleData{
+		out = append(out, network.FIBRuleData{
 			To:       to,
 			Table:    spec.Table,
 			From:     from,

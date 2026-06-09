@@ -52,7 +52,7 @@ func NewMetadata(instanceID, hostname string, kubernetesVersion string, injectPr
 
 // Render returns rendered metadata.
 func (r *Metadata) Render() (metadata []byte, err error) {
-	if err = r.validate(); err != nil {
+	if err = r.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -64,7 +64,8 @@ func (r *Metadata) Inspect() ([]byte, error) {
 	return json.Marshal(r.data)
 }
 
-func (r *Metadata) validate() error {
+// Validate reports whether the metadata is complete enough to render.
+func (r *Metadata) Validate() error {
 	if r.data.Hostname == "" {
 		return ErrMissingHostname
 	}

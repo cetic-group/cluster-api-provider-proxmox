@@ -38,8 +38,8 @@ import (
 	"github.com/ionos-cloud/cluster-api-provider-proxmox/pkg/cloudinit"
 	. "github.com/ionos-cloud/cluster-api-provider-proxmox/pkg/consts"
 	"github.com/ionos-cloud/cluster-api-provider-proxmox/pkg/ignition"
+	"github.com/ionos-cloud/cluster-api-provider-proxmox/pkg/network"
 	"github.com/ionos-cloud/cluster-api-provider-proxmox/pkg/scope"
-	"github.com/ionos-cloud/cluster-api-provider-proxmox/pkg/types"
 )
 
 const (
@@ -373,7 +373,7 @@ func TestGetCommonInterfaceConfig_MissingIPPool(t *testing.T) {
 		},
 	}
 
-	cfg := &types.NetworkConfigData{Name: "net1"}
+	cfg := &network.NetworkConfigData{Name: "net1"}
 	require.NoError(t, getCommonInterfaceConfig(context.Background(), machineScope, cfg, machineScope.ProxmoxMachine.Spec.Network.NetworkDevices[0].InterfaceConfig))
 	// Check that no IP config has been assigned even in the presence of an IPPoolRef.
 	require.Len(t, cfg.IPConfigs, 0)
@@ -407,7 +407,7 @@ func TestGetCommonInterfaceConfig(t *testing.T) {
 		},
 	}
 
-	cfg := &types.NetworkConfigData{Name: "net1"}
+	cfg := &network.NetworkConfigData{Name: "net1"}
 	require.NoError(t, getCommonInterfaceConfig(context.Background(), machineScope, cfg, machineScope.ProxmoxMachine.Spec.Network.NetworkDevices[0].InterfaceConfig))
 	require.Equal(t, "1.2.3.4", cfg.DNSServers[0])
 	require.Equal(t, "0.0.0.0/0", cfg.Routes[0].To.String())
@@ -429,7 +429,7 @@ func TestGetVirtualNetworkDevices_VRFDevice_MissingInterface(t *testing.T) {
 			}},
 		},
 	}
-	networkConfigData := []types.NetworkConfigData{{}}
+	networkConfigData := []network.NetworkConfigData{{}}
 
 	cfg, err := getVirtualNetworkDevices(context.Background(), machineScope, networkSpec, networkConfigData)
 	require.Error(t, err)
@@ -651,7 +651,7 @@ func TestReconcileBootstrapData_VirtualDevices_VRF(t *testing.T) {
 	require.Equal(t, 2, len(networkConfigData[0].IPConfigs))
 	require.Equal(t, 1, len(networkConfigData[1].IPConfigs))
 	require.Equal(t, 0, len(networkConfigData[2].IPConfigs))
-	require.Equal(t, 1, len(networkConfigData[2].Interfaces))
+	require.Equal(t, 1, len(networkConfigData[2].Children))
 	ipConfigs := networkConfigData[0].IPConfigs
 	require.Equal(t, "10.10.10.10/24", ipConfigs[0].IPAddress.String())
 	require.Equal(t, "10.20.10.10/23", ipConfigs[1].IPAddress.String())
@@ -662,8 +662,9 @@ func TestReconcileBootstrapData_VirtualDevices_VRF(t *testing.T) {
 	// VRF Data
 	require.Equal(t, "vrf", networkConfigData[2].Type)
 	require.Equal(t, "vrf-blue", networkConfigData[2].Name)
-	require.Equal(t, "eth1", networkConfigData[2].Interfaces[0])
-	require.Equal(t, int32(500), networkConfigData[2].Table)
+	// Children stores the names of the controlled devices.
+	require.Equal(t, "eth1", networkConfigData[2].Children[0])
+	require.Equal(t, int32(500), *networkConfigData[2].Table)
 }
 
 func TestVMHasMacAddress(t *testing.T) {

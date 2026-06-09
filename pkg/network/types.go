@@ -14,8 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package types provides common types used in cloudinit & ignition.
-package types
+// Package network provides the renderer-agnostic network model and its
+// structural validation, shared by the cloudinit & ignition renderers.
+package network
 
 import (
 	"net/netip"
@@ -33,12 +34,15 @@ type NetworkConfigData struct {
 	DNSServers []string
 	Type       string
 	Name       string
-	Interfaces []string // Interfaces controlled by this one.
-	Table      int32    // linux routing table number for VRF.
-	Routes     []RoutingData
-	FIBRules   []FIBRuleData // Forwarding information block for routing.
-	LinkMTU    infrav1.MTU   // linux network device MTU
-	VRF        string        // linux VRF name // only used in networkd config.
+	// Children holds the names of the devices controlled by this one (e.g. the
+	// NICs attached to a VRF). The reverse relation (Parent) is derived; see
+	// Network.Parent.
+	Children []string
+	Table    *int32 // linux routing table number for VRF.
+	Routes   []RoutingData
+	FIBRules []FIBRuleData // Forwarding information block for routing.
+	LinkMTU  infrav1.MTU   // linux network device MTU.
+	VRF      string        // linux VRF name // only used in networkd config.
 }
 
 // IPConfig stores IP configuration.
