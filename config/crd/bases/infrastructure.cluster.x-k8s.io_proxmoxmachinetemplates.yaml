@@ -868,8 +868,9 @@ spec:
                         properties:
                           enabled:
                             default: false
-                            description: enabled registers the VM as a Proxmox HA
-                              resource once it is provisioned.
+                            description: |-
+                              enabled registers the VM as a Proxmox HA resource once it is provisioned.
+                              Defaults to false when not specified.
                             type: boolean
                           state:
                             default: started
@@ -882,8 +883,6 @@ spec:
                             - disabled
                             - ignored
                             type: string
-                        required:
-                        - enabled
                         type: object
                       memoryMiB:
                         description: |-

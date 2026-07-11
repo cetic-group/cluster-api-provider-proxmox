@@ -58,12 +58,12 @@ func TestReconcileVM_HARegistersResource(t *testing.T) {
 	machineScope.SetVirtualMachineID(int64(vm.VMID))
 	machineScope.ProxmoxMachine.Status.BootstrapDataProvided = ptr.To(true)
 	machineScope.ProxmoxMachine.Status.Initialization.Provisioned = ptr.To(true)
-	machineScope.ProxmoxMachine.Spec.HighAvailability = &infrav1.HighAvailabilitySpec{Enabled: true, State: "started"}
+	machineScope.ProxmoxMachine.Spec.HighAvailability = &infrav1.HighAvailabilitySpec{Enabled: ptr.To(true), State: infrav1.HighAvailabilityStateStarted}
 
 	proxmoxClient.EXPECT().GetVM(context.Background(), "node1", int64(123)).Return(vm, nil).Once()
 	proxmoxClient.EXPECT().CloudInitStatus(context.Background(), vm).Return(false, nil).Once()
 	proxmoxClient.EXPECT().QemuAgentStatus(context.Background(), vm).Return(nil).Once()
-	proxmoxClient.EXPECT().EnsureHAResource(context.Background(), int64(123), "started").Return(nil).Once()
+	proxmoxClient.EXPECT().EnsureHAResource(context.Background(), int64(123), infrav1.HighAvailabilityStateStarted).Return(nil).Once()
 
 	result, err := ReconcileVM(context.Background(), machineScope)
 	require.NoError(t, err)
@@ -689,7 +689,7 @@ func TestReconcileDisks_UnmountCloudInitISO(t *testing.T) {
 	machineScope, proxmoxClient, _ := setupReconcilerTestWithCondition(t, infrav1.ProxmoxMachineVirtualMachineProvisionedWaitingForBootstrapReadyReason)
 
 	vm := newRunningVM()
-	vm.VirtualMachineConfig.IDE0 = "local:iso/cloud-init.iso,media=cdrom"
+	vm.VirtualMachineConfig.IDEs = map[string]string{"ide0": "local:iso/cloud-init.iso,media=cdrom"}
 	machineScope.SetVirtualMachine(vm)
 
 	proxmoxClient.EXPECT().UnmountCloudInitISO(context.Background(), vm, "ide0").Return(nil)
@@ -750,7 +750,7 @@ func TestReconcileVM_CloudInitRunning(t *testing.T) {
 func TestReconcileVM_StateMachine(t *testing.T) {
 	machineScope, proxmoxClient, _ := setupReconcilerTest(t)
 	vm := newStoppedVM()
-	vm.VirtualMachineConfig.IDE0 = "local:iso/cloud-init.iso,media=cdrom"
+	vm.VirtualMachineConfig.IDEs = map[string]string{"ide0": "local:iso/cloud-init.iso,media=cdrom"}
 
 	machineScope.InfraCluster.ProxmoxCluster.Spec.IPv6Config = &infrav1.IPConfigSpec{
 		Addresses: []string{"2001:db8::/64"},

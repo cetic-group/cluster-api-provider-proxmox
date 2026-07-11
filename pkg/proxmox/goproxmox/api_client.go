@@ -85,7 +85,7 @@ func (c *APIClient) CloneVM(ctx context.Context, templateID int, clone capmox.VM
 		NewID:       clone.NewID,
 		Description: clone.Description,
 		Format:      clone.Format,
-		Full:        clone.Full,
+		Full:        proxmox.IntOrBool(clone.Full != 0),
 		Name:        clone.Name,
 		Pool:        clone.Pool,
 		SnapName:    clone.SnapName,
@@ -212,13 +212,12 @@ NEXT_VM:
 	return vmTemplate.Node, int32(vmTemplate.VMID), nil
 }
 
-// DeleteVM deletes a VM based on the nodeName and vmID. When purge is true the
-// VM is deleted with purge=1, which instructs Proxmox to drop the VM from any
-// HA, replication and backup-job configuration it is referenced by. Callers that
-// register VMs as Proxmox HA resources must pass purge=true, since PVE otherwise
-// rejects the deletion of an HA-managed VM with "unable to remove VM <id> - used
-// in HA resources and purge parameter not set" (issue #216).
-func (c *APIClient) DeleteVM(ctx context.Context, nodeName string, vmID int64, purge bool) (*proxmox.Task, error) {
+// DeleteVM deletes a VM based on the nodeName and vmID. The VM is deleted with
+// purge, which drops it from any HA, replication and backup-job configuration it
+// is referenced by. Without it PVE rejects the deletion of an HA-managed VM with
+// "unable to remove VM <id> - used in HA resources and purge parameter not set"
+// (issue #216).
+func (c *APIClient) DeleteVM(ctx context.Context, nodeName string, vmID int64) (*proxmox.Task, error) {
 	// A vmID can not be lower than 100.
 	// If the provided vmID is lower (like -1 in issue #31), just error out without calling the API.
 	if vmID < 100 {
@@ -252,42 +251,12 @@ func (c *APIClient) DeleteVM(ctx context.Context, nodeName string, vmID int64, p
 		}
 	}
 
-	// When the caller opted into purge, the VM is known to be HA-managed, so we
-	// delete it with purge=1 directly: a plain delete first would be rejected by
-	// PVE ("used in HA resources and purge parameter not set") on every HA VM and
-	// needlessly spam the node's task log.
-	//
-	// See https://github.com/ionos-cloud/cluster-api-provider-proxmox/issues/216
-	if purge {
-		task, err := c.deleteVMWithPurge(ctx, vm)
-		if err != nil {
-			return nil, fmt.Errorf("cannot delete vm with id %d using purge: %w", vmID, err)
-		}
-		return task, nil
-	}
-
-	task, err := vm.Delete(ctx)
+	task, err := vm.Delete(ctx, &proxmox.VirtualMachineDeleteOptions{Purge: true})
 	if err != nil {
 		return nil, fmt.Errorf("cannot delete vm with id %d: %w", vmID, err)
 	}
 
 	return task, nil
-}
-
-// deleteVMWithPurge deletes a VM passing purge=1, which instructs Proxmox to
-// also remove the VM from any HA, replication and backup-job configuration it
-// is referenced by. go-proxmox's VirtualMachine.Delete does not expose the
-// purge parameter, so the request is issued directly against the API. Proxmox
-// DELETE endpoints take options as query parameters, so purge=1 is appended to
-// the path and the request goes through the version-stable Client.Delete.
-func (c *APIClient) deleteVMWithPurge(ctx context.Context, vm *proxmox.VirtualMachine) (*proxmox.Task, error) {
-	var upid proxmox.UPID
-	path := fmt.Sprintf("/nodes/%s/qemu/%d?purge=1", vm.Node, vm.VMID)
-	if err := c.Delete(ctx, path, &upid); err != nil {
-		return nil, err
-	}
-
-	return proxmox.NewTask(upid, c.Client), nil
 }
 
 // EnsureHAResource registers the VM as a Proxmox HA resource with the requested
@@ -298,9 +267,9 @@ func (c *APIClient) deleteVMWithPurge(ctx context.Context, vm *proxmox.VirtualMa
 // Proxmox HA is managed through /cluster/ha/resources on every supported PVE
 // version (the migration from HA groups to HA rules in PVE 9 did not change
 // this endpoint), so no version-specific handling is required here.
-func (c *APIClient) EnsureHAResource(ctx context.Context, vmID int64, state string) error {
+func (c *APIClient) EnsureHAResource(ctx context.Context, vmID int64, state infrav1.HighAvailabilityState) error {
 	if state == "" {
-		state = "started"
+		state = infrav1.HighAvailabilityStateStarted
 	}
 	sid := fmt.Sprintf("vm:%d", vmID)
 
@@ -316,16 +285,16 @@ func (c *APIClient) EnsureHAResource(ctx context.Context, vmID int64, state stri
 		if r.SID != sid {
 			continue
 		}
-		if r.State == state {
+		if r.State == string(state) {
 			return nil
 		}
-		if err := c.Put(ctx, "/cluster/ha/resources/"+sid, map[string]string{"state": state}, nil); err != nil {
+		if err := c.Put(ctx, "/cluster/ha/resources/"+sid, map[string]string{"state": string(state)}, nil); err != nil {
 			return fmt.Errorf("cannot update HA resource %s: %w", sid, err)
 		}
 		return nil
 	}
 
-	if err := c.Post(ctx, "/cluster/ha/resources", map[string]string{"sid": sid, "state": state}, nil); err != nil {
+	if err := c.Post(ctx, "/cluster/ha/resources", map[string]string{"sid": sid, "state": string(state)}, nil); err != nil {
 		return fmt.Errorf("cannot create HA resource %s: %w", sid, err)
 	}
 	return nil

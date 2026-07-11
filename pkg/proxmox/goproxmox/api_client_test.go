@@ -579,7 +579,7 @@ func TestProxmoxAPIClient_DeleteVM(t *testing.T) {
 				newJSONResponder(200,
 					proxmox.NodeStatuses{{Name: "test"}, {Name: "test2"}}))
 
-			task, err := client.DeleteVM(context.Background(), test.node, test.vmID, false)
+			task, err := client.DeleteVM(context.Background(), test.node, test.vmID)
 
 			if test.fails {
 				require.Error(t, err)
@@ -604,28 +604,20 @@ func haRejectedResponder(vmID int64) httpmock.Responder {
 	}
 }
 
-// TestProxmoxAPIClient_DeleteVM_HA covers deletion of HA-managed VMs (issue #216).
-// With purge=true the VM is deleted directly with purge=1 -- no plain delete is
-// attempted, since on an HA VM it would be rejected ("used in HA resources …")
-// and spam the PVE task log. With purge=false a plain delete is issued and any
-// failure is surfaced unchanged.
+// TestProxmoxAPIClient_DeleteVM_HA covers deletion of HA-managed VMs (issue #216):
+// the VM is deleted with purge=1 and no plain delete is attempted, since on an HA
+// VM PVE rejects it ("used in HA resources …"). Failures are surfaced unchanged.
 func TestProxmoxAPIClient_DeleteVM_HA(t *testing.T) {
 	const upid = "UPID:test:000D6BDA:041E0A54:654A5A1D:qmdestroy:103:root@pam:"
 	const vmID int64 = 103
 
 	tests := []struct {
 		name       string
-		purge      bool
-		plainOK    bool // purge=false: plain delete succeeds, otherwise it is HA-rejected
-		purgeFails bool // purge=true: the purge delete is rejected
-		wantPlain  int  // expected plain (no-query) deletes
-		wantPurge  int  // expected purge=1 deletes
+		purgeFails bool
 		wantErr    bool
 	}{
-		{name: "purge deletes directly", purge: true, wantPlain: 0, wantPurge: 1},
-		{name: "purge delete failure is surfaced", purge: true, purgeFails: true, wantPlain: 0, wantPurge: 1, wantErr: true},
-		{name: "no purge plain delete succeeds", purge: false, plainOK: true, wantPlain: 1, wantPurge: 0},
-		{name: "no purge surfaces HA rejection", purge: false, wantPlain: 1, wantPurge: 0, wantErr: true},
+		{name: "deletes with purge", purgeFails: false, wantErr: false},
+		{name: "purge delete failure is surfaced", purgeFails: true, wantErr: true},
 	}
 
 	for _, test := range tests {
@@ -647,22 +639,18 @@ func TestProxmoxAPIClient_DeleteVM_HA(t *testing.T) {
 			plainURL := testBaseURL + "api2/json/nodes/test/qemu/103"
 			purgeURL := plainURL + "?purge=1"
 
-			if test.plainOK {
-				httpmock.RegisterResponder(http.MethodDelete, plainURL, newJSONResponder(200, upid))
-			} else {
-				httpmock.RegisterResponder(http.MethodDelete, plainURL, haRejectedResponder(vmID))
-			}
+			httpmock.RegisterResponder(http.MethodDelete, plainURL, haRejectedResponder(vmID))
 			if test.purgeFails {
 				httpmock.RegisterResponder(http.MethodDelete, purgeURL, haRejectedResponder(vmID))
 			} else {
 				httpmock.RegisterResponder(http.MethodDelete, purgeURL, newJSONResponder(200, upid))
 			}
 
-			task, err := client.DeleteVM(context.Background(), "test", vmID, test.purge)
+			task, err := client.DeleteVM(context.Background(), "test", vmID)
 
 			calls := httpmock.GetCallCountInfo()
-			require.Equal(t, test.wantPlain, calls[http.MethodDelete+" "+plainURL], "plain deletes")
-			require.Equal(t, test.wantPurge, calls[http.MethodDelete+" "+purgeURL], "purge deletes")
+			require.Equal(t, 0, calls[http.MethodDelete+" "+plainURL], "plain deletes")
+			require.Equal(t, 1, calls[http.MethodDelete+" "+purgeURL], "purge deletes")
 
 			if test.wantErr {
 				require.Error(t, err)
@@ -685,7 +673,7 @@ func TestProxmoxAPIClient_EnsureHAResource(t *testing.T) {
 	tests := []struct {
 		name       string
 		existing   []map[string]any // current /cluster/ha/resources
-		state      string
+		state      infrav1.HighAvailabilityState
 		wantCreate bool
 		wantUpdate bool
 	}{

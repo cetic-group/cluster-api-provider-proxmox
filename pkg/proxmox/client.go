@@ -21,6 +21,8 @@ import (
 	"context"
 
 	"github.com/luthermonson/go-proxmox"
+
+	infrav1 "github.com/ionos-cloud/cluster-api-provider-proxmox/api/v1alpha2"
 )
 
 // Client Global Proxmox client interface.
@@ -36,9 +38,9 @@ type Client interface {
 
 	GetVM(ctx context.Context, nodeName string, vmID int64) (*proxmox.VirtualMachine, error)
 
-	DeleteVM(ctx context.Context, nodeName string, vmID int64, purge bool) (*proxmox.Task, error)
+	DeleteVM(ctx context.Context, nodeName string, vmID int64) (*proxmox.Task, error)
 
-	EnsureHAResource(ctx context.Context, vmID int64, state string) error
+	EnsureHAResource(ctx context.Context, vmID int64, state infrav1.HighAvailabilityState) error
 
 	GetTask(ctx context.Context, upID string) (*proxmox.Task, error)
 

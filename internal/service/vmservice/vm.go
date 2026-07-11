@@ -133,7 +133,7 @@ func ReconcileVM(ctx context.Context, scope *scope.MachineScope) (infrav1.Virtua
 	// If the machine opted into Proxmox HA, register the VM as an HA resource now
 	// that it is provisioned. This is idempotent and re-asserted on every
 	// reconcile, so it also recovers HA membership if it is removed out-of-band.
-	if ha := scope.ProxmoxMachine.Spec.HighAvailability; ha != nil && ha.Enabled {
+	if ha := scope.ProxmoxMachine.Spec.HighAvailability; ha != nil && ptr.Deref(ha.Enabled, false) {
 		if err := scope.InfraCluster.ProxmoxClient.EnsureHAResource(ctx, scope.ProxmoxMachine.GetVirtualMachineID(), ha.State); err != nil {
 			return vm, errors.Wrapf(err, "failed to ensure Proxmox HA resource for vm %s", scope.Name())
 		}
@@ -313,10 +313,10 @@ func reconcileVirtualMachineConfig(ctx context.Context, machineScope *scope.Mach
 	sockets := ptr.Deref(machineScope.ProxmoxMachine.Spec.NumSockets, 0)
 	cores := ptr.Deref(machineScope.ProxmoxMachine.Spec.NumCores, 0)
 	memory := ptr.Deref(machineScope.ProxmoxMachine.Spec.MemoryMiB, 0)
-	if sockets > 0 && vmConfig.Sockets != int(sockets) {
+	if sockets > 0 && ptr.Deref(vmConfig.Sockets, 0) != int(sockets) {
 		vmOptions = append(vmOptions, proxmox.VirtualMachineOption{Name: optionSockets, Value: sockets})
 	}
-	if cores > 0 && vmConfig.Cores != int(cores) {
+	if cores > 0 && ptr.Deref(vmConfig.Cores, 0) != int(cores) {
 		vmOptions = append(vmOptions, proxmox.VirtualMachineOption{Name: optionCores, Value: cores})
 	}
 	if memory > 0 && int(vmConfig.Memory) != int(memory) {

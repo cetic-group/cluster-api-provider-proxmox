@@ -152,18 +152,38 @@ type ProxmoxMachineSpec struct {
 	HighAvailability *HighAvailabilitySpec `json:"highAvailability,omitempty"`
 }
 
+// HighAvailabilityState is the requested state of a Proxmox HA resource.
+// +kubebuilder:validation:Enum=started;stopped;disabled;ignored
+type HighAvailabilityState string
+
+const (
+	// HighAvailabilityStateStarted requests that Proxmox keeps the VM running.
+	HighAvailabilityStateStarted HighAvailabilityState = "started"
+
+	// HighAvailabilityStateStopped requests that Proxmox keeps the VM stopped.
+	HighAvailabilityStateStopped HighAvailabilityState = "stopped"
+
+	// HighAvailabilityStateDisabled stops the VM and disables its HA management.
+	HighAvailabilityStateDisabled HighAvailabilityState = "disabled"
+
+	// HighAvailabilityStateIgnored leaves the VM out of HA management while
+	// keeping the resource registered.
+	HighAvailabilityStateIgnored HighAvailabilityState = "ignored"
+)
+
 // HighAvailabilitySpec configures Proxmox High Availability for a VM.
 type HighAvailabilitySpec struct {
 	// enabled registers the VM as a Proxmox HA resource once it is provisioned.
+	// Defaults to false when not specified.
 	// +kubebuilder:default=false
-	Enabled bool `json:"enabled"`
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// state is the requested HA state for the resource, mapped to the Proxmox
 	// HA resource "state" (request state). Defaults to "started".
-	// +kubebuilder:validation:Enum=started;stopped;disabled;ignored
 	// +kubebuilder:default=started
 	// +optional
-	State string `json:"state,omitempty"`
+	State HighAvailabilityState `json:"state,omitempty"`
 }
 
 // Storage is the physical storage on the node.

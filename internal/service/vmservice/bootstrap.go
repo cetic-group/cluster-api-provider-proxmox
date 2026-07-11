@@ -222,7 +222,7 @@ func getNetworkConfigDataForDevice(ctx context.Context, machineScope *scope.Mach
 		return nil, errors.New("empty device name")
 	}
 
-	nets := machineScope.VirtualMachine.VirtualMachineConfig.MergeNets()
+	nets := machineScope.VirtualMachine.VirtualMachineConfig.Nets
 
 	macAddress := extractMACAddress(nets[string(device)])
 	if len(macAddress) == 0 {
@@ -352,7 +352,7 @@ func getVirtualNetworkDevices(_ context.Context, _ *scope.MachineScope, network 
 }
 
 func vmHasMacAddresses(machineScope *scope.MachineScope) bool {
-	nets := machineScope.VirtualMachine.VirtualMachineConfig.MergeNets()
+	nets := machineScope.VirtualMachine.VirtualMachineConfig.Nets
 	if len(nets) == 0 {
 		return false
 	}
