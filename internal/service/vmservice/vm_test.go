@@ -929,3 +929,122 @@ func TestReconcileVM_StateMachine(t *testing.T) {
 	require.Equal(t, "192.0.2.10", machineScope.ProxmoxMachine.Status.Addresses[1].Address)
 	require.Equal(t, "2001:db8::2", machineScope.ProxmoxMachine.Status.Addresses[2].Address)
 }
+
+func TestReconcileVirtualMachineConfig_BootVolumeIOLimits(t *testing.T) {
+	machineScope, proxmoxClient, _ := setupReconcilerTestWithCondition(t, infrav1.ProxmoxMachineVirtualMachineProvisionedCloningReason)
+	machineScope.ProxmoxMachine.Spec.Disks = &infrav1.Storage{
+		BootVolume: &infrav1.DiskSize{
+			Disk:   "scsi0",
+			SizeGB: 40,
+			IOLimits: &infrav1.DiskIOLimits{
+				WriteMBps:      new(int32(40)),
+				WriteMBpsBurst: new(int32(80)),
+				WriteIOPS:      new(int32(1000)),
+				WriteIOPSBurst: new(int32(2000)),
+			},
+		},
+	}
+
+	vm := newStoppedVM()
+	vm.VirtualMachineConfig.SCSIs = map[string]string{"scsi0": "ceph:vm-100-disk-0,discard=on,iothread=1,size=30G,ssd=1"}
+	task := newTask()
+	machineScope.SetVirtualMachine(vm)
+
+	expectedOptions := []interface{}{
+		proxmox.VirtualMachineOption{
+			Name:  "scsi0",
+			Value: "ceph:vm-100-disk-0,discard=on,iothread=1,size=30G,ssd=1,mbps_wr=40,mbps_wr_max=80,iops_wr=1000,iops_wr_max=2000",
+		},
+	}
+	proxmoxClient.EXPECT().ConfigureVM(context.Background(), vm, expectedOptions...).Return(task, nil).Once()
+
+	requeue, err := reconcileVirtualMachineConfig(context.Background(), machineScope)
+	require.NoError(t, err)
+	require.True(t, requeue)
+	require.EqualValues(t, task.UPID, *machineScope.ProxmoxMachine.Status.TaskRef)
+}
+
+func TestReconcileVirtualMachineConfig_BootVolumeIOLimitsAlreadyApplied(t *testing.T) {
+	machineScope, _, _ := setupReconcilerTestWithCondition(t, infrav1.ProxmoxMachineVirtualMachineProvisionedCloningReason)
+	machineScope.ProxmoxMachine.Spec.Disks = &infrav1.Storage{
+		BootVolume: &infrav1.DiskSize{
+			Disk:     "scsi0",
+			SizeGB:   40,
+			IOLimits: &infrav1.DiskIOLimits{WriteMBps: new(int32(40))},
+		},
+	}
+
+	vm := newStoppedVM()
+	vm.VirtualMachineConfig.Description = machineScope.ProxmoxMachine.GetName()
+	vm.VirtualMachineConfig.SCSIs = map[string]string{"scsi0": "ceph:vm-100-disk-0,mbps_wr=40,size=30G"}
+	machineScope.SetVirtualMachine(vm)
+
+	// No ConfigureVM expectation: the mock fails the test if it is called.
+	requeue, err := reconcileVirtualMachineConfig(context.Background(), machineScope)
+	require.NoError(t, err)
+	require.False(t, requeue)
+}
+
+func TestReconcileVirtualMachineConfig_BootVolumeIOLimitsUnknownDisk(t *testing.T) {
+	machineScope, _, _ := setupReconcilerTestWithCondition(t, infrav1.ProxmoxMachineVirtualMachineProvisionedCloningReason)
+	machineScope.ProxmoxMachine.Spec.Disks = &infrav1.Storage{
+		BootVolume: &infrav1.DiskSize{
+			Disk:     "virtio0",
+			SizeGB:   40,
+			IOLimits: &infrav1.DiskIOLimits{WriteMBps: new(int32(40))},
+		},
+	}
+
+	vm := newStoppedVM()
+	vm.VirtualMachineConfig.SCSIs = map[string]string{"scsi0": "ceph:vm-100-disk-0,size=30G"}
+	machineScope.SetVirtualMachine(vm)
+
+	_, err := reconcileVirtualMachineConfig(context.Background(), machineScope)
+	require.ErrorContains(t, err, "virtio0")
+}
+
+func TestFormatDriveIOLimits(t *testing.T) {
+	cases := []struct {
+		name    string
+		drive   string
+		limits  infrav1.DiskIOLimits
+		want    string
+		changed bool
+	}{
+		{
+			name:    "appends every limit in a stable order",
+			drive:   "ceph:vm-1-disk-0,size=30G",
+			limits:  infrav1.DiskIOLimits{ReadMBps: new(int32(1)), ReadMBpsBurst: new(int32(2)), WriteMBps: new(int32(3)), WriteMBpsBurst: new(int32(4)), ReadIOPS: new(int32(5)), ReadIOPSBurst: new(int32(6)), WriteIOPS: new(int32(7)), WriteIOPSBurst: new(int32(8))},
+			want:    "ceph:vm-1-disk-0,size=30G,mbps_rd=1,mbps_rd_max=2,mbps_wr=3,mbps_wr_max=4,iops_rd=5,iops_rd_max=6,iops_wr=7,iops_wr_max=8",
+			changed: true,
+		},
+		{
+			name:    "replaces an existing value in place",
+			drive:   "ceph:vm-1-disk-0,mbps_wr=10,size=30G",
+			limits:  infrav1.DiskIOLimits{WriteMBps: new(int32(40))},
+			want:    "ceph:vm-1-disk-0,mbps_wr=40,size=30G",
+			changed: true,
+		},
+		{
+			name:    "leaves unrelated and unset limits untouched",
+			drive:   "ceph:vm-1-disk-0,iops_rd=500,size=30G",
+			limits:  infrav1.DiskIOLimits{WriteMBps: new(int32(40))},
+			want:    "ceph:vm-1-disk-0,iops_rd=500,size=30G,mbps_wr=40",
+			changed: true,
+		},
+		{
+			name:    "no change when already applied",
+			drive:   "ceph:vm-1-disk-0,mbps_wr=40,size=30G",
+			limits:  infrav1.DiskIOLimits{WriteMBps: new(int32(40))},
+			want:    "ceph:vm-1-disk-0,mbps_wr=40,size=30G",
+			changed: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, changed := formatDriveIOLimits(tc.drive, &tc.limits)
+			require.Equal(t, tc.want, got)
+			require.Equal(t, tc.changed, changed)
+		})
+	}
+}

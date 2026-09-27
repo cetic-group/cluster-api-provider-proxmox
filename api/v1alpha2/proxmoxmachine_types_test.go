@@ -201,6 +201,47 @@ var _ = Describe("ProxmoxMachine Test", func() {
 			dm.Spec.Disks.BootVolume.SizeGB = 4
 			Expect(k8sClient.Create(context.Background(), dm)).Should(MatchError(ContainSubstring("greater than or equal to 5")))
 		})
+
+		It("Should accept IO limits on the boot volume", func() {
+			dm := defaultMachine()
+			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{
+				WriteMBps:      new(int32(40)),
+				WriteMBpsBurst: new(int32(80)),
+				WriteIOPS:      new(int32(1000)),
+				WriteIOPSBurst: new(int32(2000)),
+				ReadMBps:       new(int32(200)),
+				ReadIOPS:       new(int32(5000)),
+				ReadIOPSBurst:  new(int32(5000)),
+				ReadMBpsBurst:  new(int32(400)),
+			}
+			Expect(k8sClient.Create(context.Background(), dm)).To(Succeed())
+		})
+
+		It("Should not allow updates to IO limits", func() {
+			dm := defaultMachine()
+			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{WriteMBps: new(int32(40))}
+			Expect(k8sClient.Create(context.Background(), dm)).To(Succeed())
+			dm.Spec.Disks.BootVolume.IOLimits.WriteMBps = new(int32(80))
+			Expect(k8sClient.Update(context.Background(), dm)).Should(MatchError(ContainSubstring("is immutable")))
+		})
+
+		It("Should reject non-positive IO limits", func() {
+			dm := defaultMachine()
+			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{WriteIOPS: new(int32(0))}
+			Expect(k8sClient.Create(context.Background(), dm)).Should(MatchError(ContainSubstring("greater than or equal to 1")))
+		})
+
+		It("Should reject a burst without its base limit", func() {
+			dm := defaultMachine()
+			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{WriteMBpsBurst: new(int32(80))}
+			Expect(k8sClient.Create(context.Background(), dm)).Should(MatchError(ContainSubstring("writeMBpsBurst requires writeMBps")))
+		})
+
+		It("Should reject a burst lower than its base limit", func() {
+			dm := defaultMachine()
+			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{ReadIOPS: new(int32(1000)), ReadIOPSBurst: new(int32(500))}
+			Expect(k8sClient.Create(context.Background(), dm)).Should(MatchError(ContainSubstring("readIOPSBurst must be greater than or equal to readIOPS")))
+		})
 	})
 
 	Context("Network", func() {

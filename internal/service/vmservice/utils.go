@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/netip"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -366,4 +367,43 @@ func ToFIBRuleData(specs []infrav1.RoutingPolicySpec) ([]network.FIBRuleData, er
 		})
 	}
 	return out, nil
+}
+
+// formatDriveIOLimits sets the Proxmox throttling options of limits on a drive
+// definition such as "storage:vm-100-disk-0,size=30G". Existing options keep
+// their position, missing ones are appended in a stable order and unset limits
+// are left untouched. It reports whether the drive definition changed.
+func formatDriveIOLimits(drive string, limits *infrav1.DiskIOLimits) (string, bool) {
+	wanted := []struct {
+		key   string
+		value *int32
+	}{
+		{"mbps_rd", limits.ReadMBps},
+		{"mbps_rd_max", limits.ReadMBpsBurst},
+		{"mbps_wr", limits.WriteMBps},
+		{"mbps_wr_max", limits.WriteMBpsBurst},
+		{"iops_rd", limits.ReadIOPS},
+		{"iops_rd_max", limits.ReadIOPSBurst},
+		{"iops_wr", limits.WriteIOPS},
+		{"iops_wr_max", limits.WriteIOPSBurst},
+	}
+
+	parts := strings.Split(drive, ",")
+	changed := false
+	for _, w := range wanted {
+		if w.value == nil {
+			continue
+		}
+		option := w.key + "=" + strconv.Itoa(int(*w.value))
+		idx := slices.IndexFunc(parts, func(p string) bool { return strings.HasPrefix(p, w.key+"=") })
+		switch {
+		case idx < 0:
+			parts = append(parts, option)
+			changed = true
+		case parts[idx] != option:
+			parts[idx] = option
+			changed = true
+		}
+	}
+	return strings.Join(parts, ","), changed
 }

@@ -217,6 +217,65 @@ type DiskSize struct {
 	// +kubebuilder:validation:Minimum=5
 	// +required
 	SizeGB int32 `json:"sizeGb,omitempty"`
+
+	// ioLimits throttles the disk with Proxmox drive I/O limits
+	// (mbps_rd, mbps_wr, iops_rd, iops_wr and their *_max burst variants).
+	// They are applied to the disk before the VM is first started.
+	// +optional
+	IOLimits *DiskIOLimits `json:"ioLimits,omitempty,omitzero"`
+}
+
+// DiskIOLimits defines Proxmox drive I/O limits. Unset fields are left untouched.
+// A burst limit caps short peaks and requires its base limit, which it must not be lower than.
+// +kubebuilder:validation:MinProperties=1
+// +kubebuilder:validation:XValidation:rule="!has(self.readMBpsBurst) || has(self.readMBps)",message="readMBpsBurst requires readMBps"
+// +kubebuilder:validation:XValidation:rule="!has(self.writeMBpsBurst) || has(self.writeMBps)",message="writeMBpsBurst requires writeMBps"
+// +kubebuilder:validation:XValidation:rule="!has(self.readIOPSBurst) || has(self.readIOPS)",message="readIOPSBurst requires readIOPS"
+// +kubebuilder:validation:XValidation:rule="!has(self.writeIOPSBurst) || has(self.writeIOPS)",message="writeIOPSBurst requires writeIOPS"
+// +kubebuilder:validation:XValidation:rule="!has(self.readMBpsBurst) || !has(self.readMBps) || self.readMBpsBurst >= self.readMBps",message="readMBpsBurst must be greater than or equal to readMBps"
+// +kubebuilder:validation:XValidation:rule="!has(self.writeMBpsBurst) || !has(self.writeMBps) || self.writeMBpsBurst >= self.writeMBps",message="writeMBpsBurst must be greater than or equal to writeMBps"
+// +kubebuilder:validation:XValidation:rule="!has(self.readIOPSBurst) || !has(self.readIOPS) || self.readIOPSBurst >= self.readIOPS",message="readIOPSBurst must be greater than or equal to readIOPS"
+// +kubebuilder:validation:XValidation:rule="!has(self.writeIOPSBurst) || !has(self.writeIOPS) || self.writeIOPSBurst >= self.writeIOPS",message="writeIOPSBurst must be greater than or equal to writeIOPS"
+type DiskIOLimits struct {
+	// readMBps limits read throughput in MB/s (Proxmox mbps_rd).
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	ReadMBps *int32 `json:"readMBps,omitempty"`
+
+	// readMBpsBurst limits read throughput peaks in MB/s (Proxmox mbps_rd_max).
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	ReadMBpsBurst *int32 `json:"readMBpsBurst,omitempty"`
+
+	// writeMBps limits write throughput in MB/s (Proxmox mbps_wr).
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	WriteMBps *int32 `json:"writeMBps,omitempty"`
+
+	// writeMBpsBurst limits write throughput peaks in MB/s (Proxmox mbps_wr_max).
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	WriteMBpsBurst *int32 `json:"writeMBpsBurst,omitempty"`
+
+	// readIOPS limits read operations per second (Proxmox iops_rd).
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	ReadIOPS *int32 `json:"readIOPS,omitempty"`
+
+	// readIOPSBurst limits read operation peaks per second (Proxmox iops_rd_max).
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	ReadIOPSBurst *int32 `json:"readIOPSBurst,omitempty"`
+
+	// writeIOPS limits write operations per second (Proxmox iops_wr).
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	WriteIOPS *int32 `json:"writeIOPS,omitempty"`
+
+	// writeIOPSBurst limits write operation peaks per second (Proxmox iops_wr_max).
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	WriteIOPSBurst *int32 `json:"writeIOPSBurst,omitempty"`
 }
 
 // TargetFileStorageFormat the target format of the cloned disk.
