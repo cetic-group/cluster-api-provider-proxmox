@@ -202,7 +202,7 @@ func Convert_v1alpha2_ProxmoxMachineSpec_To_v1alpha1_ProxmoxMachineSpec(in *v1al
 }
 
 // Convert_v1alpha2_DiskSize_To_v1alpha1_DiskSize converts a v1alpha2 DiskSize
-// to v1alpha1. IOLimits has no v1alpha1 equivalent, so it is dropped here;
+// to v1alpha1. IOLimits and Discard have no v1alpha1 equivalent, so they are dropped here;
 // ConvertFrom stores it in the Hub-data annotation and ConvertTo restores it,
 // keeping round-trips lossless.
 func Convert_v1alpha2_DiskSize_To_v1alpha1_DiskSize(in *v1alpha2.DiskSize, out *DiskSize, s conversion.Scope) error {
