@@ -349,6 +349,18 @@ func reconcileVirtualMachineConfig(ctx context.Context, machineScope *scope.Mach
 		}
 	}
 
+	// Boot volume I/O limits, set on the drive before the disk is resized.
+	if disks := machineScope.ProxmoxMachine.Spec.Disks; disks != nil && disks.BootVolume != nil && disks.BootVolume.IOLimits != nil {
+		bv := disks.BootVolume
+		drive, found := vmConfig.MergeDisks()[bv.Disk]
+		if !found {
+			return false, errors.Errorf("cannot apply I/O limits: disk %s not found on VM %s", bv.Disk, machineScope.Name())
+		}
+		if value, changed := formatDriveIOLimits(drive, bv.IOLimits); changed {
+			vmOptions = append(vmOptions, proxmox.VirtualMachineOption{Name: bv.Disk, Value: value})
+		}
+	}
+
 	// custom tags
 	if machineScope.ProxmoxMachine.Spec.Tags != nil {
 		machineScope.VirtualMachine.SplitTags()

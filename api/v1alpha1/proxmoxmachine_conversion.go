@@ -113,6 +113,13 @@ func restoreProxmoxMachineSpec(src *ProxmoxMachineSpec, dst *v1alpha2.ProxmoxMac
 		dst.HighAvailability = restored.HighAvailability
 	}
 
+	// Disk IOLimits do not exist in v1alpha1; restore them from the Hub
+	// annotation so a v1alpha1 round-trip does not drop the throttling.
+	if ok && dst.Disks != nil && dst.Disks.BootVolume != nil &&
+		restored.Disks != nil && restored.Disks.BootVolume != nil {
+		dst.Disks.BootVolume.IOLimits = restored.Disks.BootVolume.IOLimits
+	}
+
 	if dst.Network != nil && restored.Network != nil {
 		for i := range restored.Network.NetworkDevices {
 			device := getNetDeviceByName(src.Network.AdditionalDevices, string(dst.Network.NetworkDevices[i].Name))

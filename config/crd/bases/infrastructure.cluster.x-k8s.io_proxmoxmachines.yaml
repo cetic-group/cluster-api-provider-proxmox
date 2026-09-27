@@ -960,6 +960,87 @@ spec:
                           Example values are: ide[0-3], scsi[0-30], sata[0-5].
                         minLength: 1
                         type: string
+                      ioLimits:
+                        description: |-
+                          ioLimits throttles the disk with Proxmox drive I/O limits
+                          (mbps_rd, mbps_wr, iops_rd, iops_wr and their *_max burst variants).
+                          They are applied to the disk before the VM is first started.
+                        minProperties: 1
+                        properties:
+                          readIOPS:
+                            description: readIOPS limits read operations per second
+                              (Proxmox iops_rd).
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          readIOPSBurst:
+                            description: readIOPSBurst limits read operation peaks
+                              per second (Proxmox iops_rd_max).
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          readMBps:
+                            description: readMBps limits read throughput in MB/s (Proxmox
+                              mbps_rd).
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          readMBpsBurst:
+                            description: readMBpsBurst limits read throughput peaks
+                              in MB/s (Proxmox mbps_rd_max).
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          writeIOPS:
+                            description: writeIOPS limits write operations per second
+                              (Proxmox iops_wr).
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          writeIOPSBurst:
+                            description: writeIOPSBurst limits write operation peaks
+                              per second (Proxmox iops_wr_max).
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          writeMBps:
+                            description: writeMBps limits write throughput in MB/s
+                              (Proxmox mbps_wr).
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          writeMBpsBurst:
+                            description: writeMBpsBurst limits write throughput peaks
+                              in MB/s (Proxmox mbps_wr_max).
+                            format: int32
+                            minimum: 1
+                            type: integer
+                        type: object
+                        x-kubernetes-validations:
+                        - message: readMBpsBurst requires readMBps
+                          rule: '!has(self.readMBpsBurst) || has(self.readMBps)'
+                        - message: writeMBpsBurst requires writeMBps
+                          rule: '!has(self.writeMBpsBurst) || has(self.writeMBps)'
+                        - message: readIOPSBurst requires readIOPS
+                          rule: '!has(self.readIOPSBurst) || has(self.readIOPS)'
+                        - message: writeIOPSBurst requires writeIOPS
+                          rule: '!has(self.writeIOPSBurst) || has(self.writeIOPS)'
+                        - message: readMBpsBurst must be greater than or equal to
+                            readMBps
+                          rule: '!has(self.readMBpsBurst) || !has(self.readMBps) ||
+                            self.readMBpsBurst >= self.readMBps'
+                        - message: writeMBpsBurst must be greater than or equal to
+                            writeMBps
+                          rule: '!has(self.writeMBpsBurst) || !has(self.writeMBps)
+                            || self.writeMBpsBurst >= self.writeMBps'
+                        - message: readIOPSBurst must be greater than or equal to
+                            readIOPS
+                          rule: '!has(self.readIOPSBurst) || !has(self.readIOPS) ||
+                            self.readIOPSBurst >= self.readIOPS'
+                        - message: writeIOPSBurst must be greater than or equal to
+                            writeIOPS
+                          rule: '!has(self.writeIOPSBurst) || !has(self.writeIOPS)
+                            || self.writeIOPSBurst >= self.writeIOPS'
                       sizeGb:
                         description: |-
                           sizeGb defines the size in gigabytes.
