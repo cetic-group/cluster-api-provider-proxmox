@@ -204,6 +204,7 @@ var _ = Describe("ProxmoxMachine Test", func() {
 
 		It("Should accept IO limits on the boot volume", func() {
 			dm := defaultMachine()
+			dm.Spec.Disks.BootVolume.Discard = new(false)
 			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{
 				WriteMBps:      new(int32(40)),
 				WriteMBpsBurst: new(int32(80)),
@@ -217,11 +218,32 @@ var _ = Describe("ProxmoxMachine Test", func() {
 			Expect(k8sClient.Create(context.Background(), dm)).To(Succeed())
 		})
 
+		It("Should reject write MB/s limits unless discard is disabled", func() {
+			dm := defaultMachine()
+			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{WriteMBps: new(int32(60))}
+			Expect(k8sClient.Create(context.Background(), dm)).Should(MatchError(ContainSubstring("writeMBps and writeMBpsBurst require discard: false")))
+
+			dm.Spec.Disks.BootVolume.Discard = new(true)
+			Expect(k8sClient.Create(context.Background(), dm)).Should(MatchError(ContainSubstring("writeMBps and writeMBpsBurst require discard: false")))
+		})
+
+		It("Should accept IOPS limits whatever the discard setting", func() {
+			dm := defaultMachine()
+			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{WriteIOPS: new(int32(1000)), ReadMBps: new(int32(200))}
+			Expect(k8sClient.Create(context.Background(), dm)).To(Succeed())
+		})
+
+		It("Should accept discard alone", func() {
+			dm := defaultMachine()
+			dm.Spec.Disks.BootVolume.Discard = new(false)
+			Expect(k8sClient.Create(context.Background(), dm)).To(Succeed())
+		})
+
 		It("Should not allow updates to IO limits", func() {
 			dm := defaultMachine()
-			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{WriteMBps: new(int32(40))}
+			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{WriteIOPS: new(int32(1000))}
 			Expect(k8sClient.Create(context.Background(), dm)).To(Succeed())
-			dm.Spec.Disks.BootVolume.IOLimits.WriteMBps = new(int32(80))
+			dm.Spec.Disks.BootVolume.IOLimits.WriteIOPS = new(int32(2000))
 			Expect(k8sClient.Update(context.Background(), dm)).Should(MatchError(ContainSubstring("is immutable")))
 		})
 
@@ -233,6 +255,7 @@ var _ = Describe("ProxmoxMachine Test", func() {
 
 		It("Should reject a burst without its base limit", func() {
 			dm := defaultMachine()
+			dm.Spec.Disks.BootVolume.Discard = new(false)
 			dm.Spec.Disks.BootVolume.IOLimits = &DiskIOLimits{WriteMBpsBurst: new(int32(80))}
 			Expect(k8sClient.Create(context.Background(), dm)).Should(MatchError(ContainSubstring("writeMBpsBurst requires writeMBps")))
 		})

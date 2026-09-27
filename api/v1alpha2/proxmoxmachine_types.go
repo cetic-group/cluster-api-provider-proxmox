@@ -201,6 +201,7 @@ type Storage struct {
 }
 
 // DiskSize is contains values for the disk device and size.
+// +kubebuilder:validation:XValidation:rule="!has(self.ioLimits) || !(has(self.ioLimits.writeMBps) || has(self.ioLimits.writeMBpsBurst)) || (has(self.discard) && !self.discard)",message="writeMBps and writeMBpsBurst require discard: false (QEMU counts discarded bytes as writes and would stall the disk)"
 type DiskSize struct {
 	// disk is the name of the disk device that should be resized.
 	// Example values are: ide[0-3], scsi[0-30], sata[0-5].
@@ -217,6 +218,17 @@ type DiskSize struct {
 	// +kubebuilder:validation:Minimum=5
 	// +required
 	SizeGB int32 `json:"sizeGb,omitempty"`
+
+	// discard sets the Proxmox discard option of the disk before the VM is
+	// first started: true passes the guest TRIM/UNMAP requests to the storage
+	// (discard=on), false ignores them (discard=ignore). Unset keeps the value
+	// of the template.
+	//
+	// Write MB/s limits require discard to be false: QEMU throttling counts
+	// every discarded byte as a written byte, so a large TRIM (fstrim, image
+	// layers deleted by a container runtime) stalls the disk for minutes.
+	// +optional
+	Discard *bool `json:"discard,omitempty"`
 
 	// ioLimits throttles the disk with Proxmox drive I/O limits
 	// (mbps_rd, mbps_wr, iops_rd, iops_wr and their *_max burst variants).

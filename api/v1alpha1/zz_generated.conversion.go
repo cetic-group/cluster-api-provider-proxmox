@@ -461,6 +461,7 @@ func Convert_v1alpha1_DiskSize_To_v1alpha2_DiskSize(in *DiskSize, out *v1alpha2.
 func autoConvert_v1alpha2_DiskSize_To_v1alpha1_DiskSize(in *v1alpha2.DiskSize, out *DiskSize, s conversion.Scope) error {
 	out.Disk = in.Disk
 	out.SizeGB = in.SizeGB
+	// WARNING: in.Discard requires manual conversion: does not exist in peer-type
 	// WARNING: in.IOLimits requires manual conversion: does not exist in peer-type
 	return nil
 }

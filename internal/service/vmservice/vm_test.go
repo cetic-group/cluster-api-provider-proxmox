@@ -1042,9 +1042,91 @@ func TestFormatDriveIOLimits(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, changed := formatDriveIOLimits(tc.drive, &tc.limits)
+			got, changed := formatBootVolumeDrive(tc.drive, &infrav1.DiskSize{Disk: "scsi0", SizeGB: 30, IOLimits: &tc.limits})
 			require.Equal(t, tc.want, got)
 			require.Equal(t, tc.changed, changed)
 		})
 	}
+}
+
+func TestFormatBootVolumeDriveDiscard(t *testing.T) {
+	cases := []struct {
+		name    string
+		drive   string
+		bv      infrav1.DiskSize
+		want    string
+		changed bool
+	}{
+		{
+			name:    "discard false replaces discard=on in place",
+			drive:   "ceph:vm-1-disk-0,discard=on,iothread=1,size=30G",
+			bv:      infrav1.DiskSize{Discard: new(false)},
+			want:    "ceph:vm-1-disk-0,discard=ignore,iothread=1,size=30G",
+			changed: true,
+		},
+		{
+			name:    "discard false is explicit when the template has no discard",
+			drive:   "ceph:vm-1-disk-0,size=30G",
+			bv:      infrav1.DiskSize{Discard: new(false)},
+			want:    "ceph:vm-1-disk-0,size=30G,discard=ignore",
+			changed: true,
+		},
+		{
+			name:    "discard true turns it on",
+			drive:   "ceph:vm-1-disk-0,discard=ignore,size=30G",
+			bv:      infrav1.DiskSize{Discard: new(true)},
+			want:    "ceph:vm-1-disk-0,discard=on,size=30G",
+			changed: true,
+		},
+		{
+			name:    "unset discard keeps the template value",
+			drive:   "ceph:vm-1-disk-0,discard=on,size=30G",
+			bv:      infrav1.DiskSize{IOLimits: &infrav1.DiskIOLimits{WriteIOPS: new(int32(1000))}},
+			want:    "ceph:vm-1-disk-0,discard=on,size=30G,iops_wr=1000",
+			changed: true,
+		},
+		{
+			name:    "discard and write MB/s together",
+			drive:   "ceph:vm-1-disk-0,discard=on,size=30G",
+			bv:      infrav1.DiskSize{Discard: new(false), IOLimits: &infrav1.DiskIOLimits{WriteMBps: new(int32(60))}},
+			want:    "ceph:vm-1-disk-0,discard=ignore,size=30G,mbps_wr=60",
+			changed: true,
+		},
+		{
+			name:    "no change when already applied",
+			drive:   "ceph:vm-1-disk-0,discard=ignore,size=30G",
+			bv:      infrav1.DiskSize{Discard: new(false)},
+			want:    "ceph:vm-1-disk-0,discard=ignore,size=30G",
+			changed: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.bv.Disk, tc.bv.SizeGB = "scsi0", 30
+			got, changed := formatBootVolumeDrive(tc.drive, &tc.bv)
+			require.Equal(t, tc.want, got)
+			require.Equal(t, tc.changed, changed)
+		})
+	}
+}
+
+func TestReconcileVirtualMachineConfig_BootVolumeDiscardOnly(t *testing.T) {
+	machineScope, proxmoxClient, _ := setupReconcilerTestWithCondition(t, infrav1.ProxmoxMachineVirtualMachineProvisionedCloningReason)
+	machineScope.ProxmoxMachine.Spec.Disks = &infrav1.Storage{
+		BootVolume: &infrav1.DiskSize{Disk: "scsi0", SizeGB: 40, Discard: new(false)},
+	}
+
+	vm := newStoppedVM()
+	vm.VirtualMachineConfig.SCSIs = map[string]string{"scsi0": "ceph:vm-100-disk-0,discard=on,size=30G"}
+	task := newTask()
+	machineScope.SetVirtualMachine(vm)
+
+	expectedOptions := []interface{}{
+		proxmox.VirtualMachineOption{Name: "scsi0", Value: "ceph:vm-100-disk-0,discard=ignore,size=30G"},
+	}
+	proxmoxClient.EXPECT().ConfigureVM(context.Background(), vm, expectedOptions...).Return(task, nil).Once()
+
+	requeue, err := reconcileVirtualMachineConfig(context.Background(), machineScope)
+	require.NoError(t, err)
+	require.True(t, requeue)
 }

@@ -369,32 +369,45 @@ func ToFIBRuleData(specs []infrav1.RoutingPolicySpec) ([]network.FIBRuleData, er
 	return out, nil
 }
 
-// formatDriveIOLimits sets the Proxmox throttling options of limits on a drive
-// definition such as "storage:vm-100-disk-0,size=30G". Existing options keep
-// their position, missing ones are appended in a stable order and unset limits
-// are left untouched. It reports whether the drive definition changed.
-func formatDriveIOLimits(drive string, limits *infrav1.DiskIOLimits) (string, bool) {
-	wanted := []struct {
-		key   string
-		value *int32
-	}{
-		{"mbps_rd", limits.ReadMBps},
-		{"mbps_rd_max", limits.ReadMBpsBurst},
-		{"mbps_wr", limits.WriteMBps},
-		{"mbps_wr_max", limits.WriteMBpsBurst},
-		{"iops_rd", limits.ReadIOPS},
-		{"iops_rd_max", limits.ReadIOPSBurst},
-		{"iops_wr", limits.WriteIOPS},
-		{"iops_wr_max", limits.WriteIOPSBurst},
+// formatBootVolumeDrive sets the discard option and the Proxmox throttling
+// options of a boot volume on a drive definition such as
+// "storage:vm-100-disk-0,size=30G". Existing options keep their position,
+// missing ones are appended in a stable order and unset fields are left
+// untouched. It reports whether the drive definition changed.
+func formatBootVolumeDrive(drive string, bv *infrav1.DiskSize) (string, bool) {
+	type option struct{ key, value string }
+	var wanted []option
+	if bv.Discard != nil {
+		value := "ignore"
+		if *bv.Discard {
+			value = "on"
+		}
+		wanted = append(wanted, option{"discard", value})
+	}
+	if limits := bv.IOLimits; limits != nil {
+		for _, l := range []struct {
+			key   string
+			value *int32
+		}{
+			{"mbps_rd", limits.ReadMBps},
+			{"mbps_rd_max", limits.ReadMBpsBurst},
+			{"mbps_wr", limits.WriteMBps},
+			{"mbps_wr_max", limits.WriteMBpsBurst},
+			{"iops_rd", limits.ReadIOPS},
+			{"iops_rd_max", limits.ReadIOPSBurst},
+			{"iops_wr", limits.WriteIOPS},
+			{"iops_wr_max", limits.WriteIOPSBurst},
+		} {
+			if l.value != nil {
+				wanted = append(wanted, option{l.key, strconv.Itoa(int(*l.value))})
+			}
+		}
 	}
 
 	parts := strings.Split(drive, ",")
 	changed := false
 	for _, w := range wanted {
-		if w.value == nil {
-			continue
-		}
-		option := w.key + "=" + strconv.Itoa(int(*w.value))
+		option := w.key + "=" + w.value
 		idx := slices.IndexFunc(parts, func(p string) bool { return strings.HasPrefix(p, w.key+"=") })
 		switch {
 		case idx < 0:

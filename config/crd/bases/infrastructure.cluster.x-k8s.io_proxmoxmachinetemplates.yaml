@@ -816,6 +816,17 @@ spec:
                               This field is optional, and should only be set if you want
                               to change the size of the boot volume.
                             properties:
+                              discard:
+                                description: |-
+                                  discard sets the Proxmox discard option of the disk before the VM is
+                                  first started: true passes the guest TRIM/UNMAP requests to the storage
+                                  (discard=on), false ignores them (discard=ignore). Unset keeps the value
+                                  of the template.
+
+                                  Write MB/s limits require discard to be false: QEMU throttling counts
+                                  every discarded byte as a written byte, so a large TRIM (fstrim, image
+                                  layers deleted by a container runtime) stalls the disk for minutes.
+                                type: boolean
                               disk:
                                 description: |-
                                   disk is the name of the disk device that should be resized.
@@ -920,6 +931,12 @@ spec:
                             x-kubernetes-validations:
                             - message: Value is immutable
                               rule: self == oldSelf
+                            - message: 'writeMBps and writeMBpsBurst require discard:
+                                false (QEMU counts discarded bytes as writes and would
+                                stall the disk)'
+                              rule: '!has(self.ioLimits) || !(has(self.ioLimits.writeMBps)
+                                || has(self.ioLimits.writeMBpsBurst)) || (has(self.discard)
+                                && !self.discard)'
                         type: object
                       format:
                         description: format for file storage. Only valid for full
